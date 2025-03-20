@@ -54,10 +54,6 @@ public class CompanyOrderBook implements OrderBook {
         final Price now = new Price(order.getPrice());
         Collection<TradeHistoryEvent> result = match(now, order);
         if (order.hasRemainingQuantity()) {
-            OrderStorage orderStorage = getSameTypeOrderStorage(now, order.getType());
-            if (orderStorage == null) {
-                addOrderStorage(order.getType(), now);
-            }
             addRemainingTradeOrder(order);
         }
         return result;
@@ -67,11 +63,7 @@ public class CompanyOrderBook implements OrderBook {
         final List<TradeHistoryEvent> results = new ArrayList<>();
         while (order.hasRemainingQuantity()) {
             final OrderStorage orderStorage = getCounterOrderStorage(price, order.getType());
-            if (orderStorage == null) {
-                addOrderStorage(order.getType(), price);
-                break;
-            }
-            if (orderStorage.isEmpty()) {
+            if (orderStorage == null || orderStorage.isEmpty()) {
                 break;
             }
             TradeHistoryEvent history = orderStorage.match(order);
@@ -80,10 +72,18 @@ public class CompanyOrderBook implements OrderBook {
         return results;
     }
 
-    private OrderStorage getSameTypeOrderStorage(final Price price, final Type type) {
+    private OrderStorage getOrCreateSameTypeOrderStorage(final Price price, final Type type) {
         if (type.isSell()) {
+            if (sellOrders.containsKey(price)) {
+                return sellOrders.get(price);
+            }
+            sellOrders.put(price, new OrderStorage());
             return sellOrders.get(price);
         }
+        if (buyOrders.containsKey(price)) {
+            return buyOrders.get(price);
+        }
+        buyOrders.put(price, new OrderStorage());
         return buyOrders.get(price);
     }
 
@@ -94,25 +94,14 @@ public class CompanyOrderBook implements OrderBook {
         return sellOrders.get(price);
     }
 
-    private void addOrderStorage(final Type type, final Price price) {
-        if (type.isSell()) {
-            sellOrders.put(price, new OrderStorage());
-            return;
-        }
-        buyOrders.put(price, new OrderStorage());
-    }
-
     private void addRemainingTradeOrder(final TradeOrder order) {
         Price price = new Price(order.getPrice());
         if (order.isSellType()) {
-            OrderStorage orderStorage = getSameTypeOrderStorage(price, order.getType());
-            if (orderStorage == null) {
-                addOrderStorage(order.getType(), price);
-            }
+            OrderStorage orderStorage = getOrCreateSameTypeOrderStorage(price, order.getType());
             orderStorage.add(order);
             return;
         }
-        OrderStorage orderStorage = getSameTypeOrderStorage(price, order.getType());
+        OrderStorage orderStorage = getOrCreateSameTypeOrderStorage(price, order.getType());
         orderStorage.add(order);
     }
 

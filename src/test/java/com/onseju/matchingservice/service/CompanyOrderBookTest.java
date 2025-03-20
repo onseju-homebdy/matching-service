@@ -122,92 +122,53 @@ public class CompanyOrderBookTest {
             });
         }
 
-//
-//        @Test
-//        @DisplayName("TC8.1.5 부분 체결 테스트")
-//        void testPartialOrderExecution() {
-//            // Given
-//            // 서로 다른 가격의 매도 주문 2개 추가
-//            TradeOrder sellOrder1 = createOrder(Type.SELL, new BigDecimal("50000"), new BigDecimal("5"), OrderStatus.ACTIVE, account1);
-//            TradeOrder sellOrder2 = createOrder(Type.SELL, new BigDecimal("50500"), new BigDecimal("10"), OrderStatus.ACTIVE, account1);
-//            orderBook.received(sellOrder1);
-//            orderBook.received(sellOrder2);
-//
-//            // When
-//            // 매수 주문 추가 (매도 주문보다 높은 가격, 매도 주문 총량보다 적은 수량)
-//            TradeOrder buyOrder = createOrder(Type.BUY, new BigDecimal("51000"), new BigDecimal("7"), OrderStatus.ACTIVE, account2);
-//            orderBook.received(buyOrder);
-//
-//            // Then
-//            // 호가창 확인
-//            OrderBookResponse afterExecutionOrderBook = orderBook.getBook();
-//
-//            // 매도 호가 확인
-//            List<PriceLevelDto> sellLevels = afterExecutionOrderBook.sellLevels();
-//            assertEquals(1, sellLevels.size(), "매도 호가가 1개만 남아 있어야 함");
-//            assertEquals(new BigDecimal("50500"), sellLevels.get(0).price(), "남은 매도 호가는 높은 가격의 호가여야 함");
-//            assertEquals(new BigDecimal("8"), sellLevels.get(0).quantity(), "남은 매도 수량이 8이어야 함 (원래 10개에서 2개 체결)");
-//
-//            // 매수 호가 확인 - 모두 체결되어 없어야 함
-//            List<PriceLevelDto> buyLevels = afterExecutionOrderBook.buyLevels();
-//            assertEquals(0, buyLevels.size(), "매수 호가가 없어야 함 (모두 체결됨)");
-//        }
-//
-//        @Test
-//        @DisplayName("TC3.1.2 & TC3.2.2 부분 체결")
-//        void testPartialExecution() throws MatchingException {
-//            // given
-//            TradeOrder buyOrder = createOrder(Type.BUY, new BigDecimal("50000"), new BigDecimal("10"), OrderStatus.ACTIVE, account1);
-//            TradeOrder sellOrder = createOrder(Type.SELL, new BigDecimal("50000"), new BigDecimal("5"), OrderStatus.ACTIVE, account2);
-//
-//            // when
-//            List<TradeHistoryResponse> responses = new ArrayList<>();
-//            responses.addAll(orderBook.received(buyOrder));
-//            responses.addAll(orderBook.received(sellOrder));
-//
-//            // then
-//            OrderBookResponse response = orderBook.getBook();
-//            assertFalse(response.buyLevels().isEmpty());
-//            assertTrue(response.sellLevels().isEmpty());
-//            assertThat(responses.get(0).quantity()).isEqualTo(new BigDecimal("5"));
-//        }
-//
-//        @Test
-//        @DisplayName("TC3.3 주문 불균형 상황 테스트")
-//        @Transactional
-//        void testOrderImbalance() {
-//            // 다수의 매수 주문 생성
-//            for (int i = 0; i < 5; i++) {
-//                TradeOrder buyOrder = createOrder(Type.BUY, new BigDecimal("50000"), new BigDecimal("10"), OrderStatus.ACTIVE, account1);
-//                orderBook.received(buyOrder);
-//            }
-//
-//            // 소수의 매도 주문 생성
-//            TradeOrder sellOrder = createOrder(Type.SELL, new BigDecimal("50000"), new BigDecimal("5"), OrderStatus.ACTIVE, account2);
-//            orderBook.received(sellOrder);
-//
-//            OrderBookResponse response = orderBook.getBook();
-//            assertFalse(response.buyLevels().isEmpty());
-//            assertTrue(response.sellLevels().isEmpty());
-//            assertEquals(new BigDecimal("45"), response.buyLevels().get(0).quantity());
-//        }
-//
-//        @Test
-//        @DisplayName("TC3.4 대량 주문 처리 테스트")
-//        void testLargeOrderProcessing() throws MatchingException {
-//            BigDecimal largeQuantity = new BigDecimal("1000000");
-//            TradeOrder largeBuyOrder = createOrder(Type.BUY, new BigDecimal("50000"), largeQuantity, OrderStatus.ACTIVE, account1);
-//            orderBook.received(largeBuyOrder);
-//
-//            TradeOrder smallSellOrder = createOrder(Type.SELL, new BigDecimal("50000"), new BigDecimal("100"),
-//                    OrderStatus.ACTIVE, account2);
-//            orderBook.received(smallSellOrder);
-//
-//            OrderBookResponse response = orderBook.getBook();
-//            assertFalse(response.buyLevels().isEmpty());
-//            assertTrue(response.sellLevels().isEmpty());
-//            assertEquals(largeQuantity.subtract(new BigDecimal("100")), response.buyLevels().get(0).quantity());
-//        }
+
+        @Test
+        @DisplayName("지정가 매도 주문 시, 일치하는 가격의 매수 주문과 부분 체결될 수 있다.")
+        void testPartialOrderExecution() {
+            // given
+            TradeOrder buyOrder = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+            TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("10"), 2L);
+
+            // when
+            orderBook.received(buyOrder);
+            Collection<TradeHistoryEvent> responses = orderBook.received(sellOrder);
+
+            // then
+            assertThat(responses).hasSize(1);
+            assertThat(sellOrder.getRemainingQuantity().get()).isEqualTo(new BigDecimal("5"));
+            responses.forEach(result -> {
+                assertThat(result.sellOrderId()).isEqualTo(sellOrder.getId());
+                assertThat(result.buyOrderId()).isEqualTo(buyOrder.getId());
+                assertThat(result.price()).isEqualTo(buyOrder.getPrice());
+                assertThat(result.quantity()).isEqualTo(buyOrder.getTotalQuantity().subtract(buyOrder.getRemainingQuantity().get()));
+            });
+        }
+
+
+        @Test
+        @DisplayName("주문 불균형 상황 테스트")
+        void testOrderImbalance() {
+            // given
+            for (int i = 0; i < 5; i++) {
+                TradeOrder buyOrder = createOrder((long) i, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+                orderBook.received(buyOrder);
+            }
+
+            // when
+            TradeOrder sellOrder = createOrder(5L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            Collection<TradeHistoryEvent> response = orderBook.received(sellOrder);
+
+            // then
+            assertThat(response).hasSize(1);
+        }
+    }
+
+    @Nested
+    @DisplayName("시장가 주문 테스트")
+    class MarketOrderTests {
+
+
     }
 
     private TradeOrder createOrder(Long id, Type type, BigDecimal price, BigDecimal quantity, Long accountId) {
