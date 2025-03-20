@@ -6,6 +6,8 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Getter
 @AllArgsConstructor
@@ -22,7 +24,7 @@ public class TradeOrder {
 
     private final BigDecimal totalQuantity;
 
-    private BigDecimal remainingQuantity;
+    private AtomicReference<BigDecimal> remainingQuantity;
 
     private BigDecimal price;
 
@@ -40,22 +42,44 @@ public class TradeOrder {
 
     // 남은 양 감소
     public void decreaseRemainingQuantity(final BigDecimal quantity) {
-        this.remainingQuantity = this.remainingQuantity.subtract(quantity);
-        if (this.remainingQuantity.compareTo(BigDecimal.ZERO) == 0) {
-            this.status = OrderStatus.COMPLETE;
-        }
+        remainingQuantity.updateAndGet(before ->
+                before.subtract(quantity).max(BigDecimal.ZERO)
+        );
     }
 
     public boolean isSellType() {
-        return type == Type.SELL;
+        return type.isSell();
     }
 
     public BigDecimal calculateMatchQuantity(final TradeOrder other) {
-        return remainingQuantity.min(other.getRemainingQuantity());
+        long min = Math.min(remainingQuantity.get().longValue(), other.getRemainingQuantity().get().longValue());
+        return new BigDecimal(min);
     }
 
     // 체결 완료 여부 확인
     public boolean isCompletelyFilled() {
-        return this.remainingQuantity.compareTo(BigDecimal.ZERO) == 0;
+        return !this.remainingQuantity.get().equals(BigDecimal.ZERO);
+    }
+
+    public boolean hasRemainingQuantity() {
+        return !remainingQuantity.get().equals(BigDecimal.ZERO);
+    }
+
+    public boolean isMarketOrder() {
+        return type.isMarket();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        TradeOrder that = (TradeOrder) o;
+        return Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
     }
 }

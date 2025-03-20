@@ -1,4 +1,4 @@
-package com.onseju.matchingservice;
+package com.onseju.matchingservice.exception;
 
 public class MatchingException extends RuntimeException {
 
