@@ -12,6 +12,8 @@ public class OrderStorage {
 
     private final ConcurrentSkipListSet<TradeOrder> elements = new ConcurrentSkipListSet<>(
             Comparator.comparing(TradeOrder::getCreatedDateTime)
+                    .thenComparing(TradeOrder::getTotalQuantity)
+                    .thenComparing(TradeOrder::getId)
     );
 
     public TradeHistoryEvent match(final TradeOrder incomingOrder) {
@@ -22,7 +24,7 @@ public class OrderStorage {
         if (!matchingOrder.hasRemainingQuantity()) {
             elements.remove(matchingOrder);
         }
-        return  createResponse(incomingOrder, matchingOrder, matchedQuantity);
+        return createResponse(incomingOrder, matchingOrder, matchedQuantity);
     }
 
     private TradeHistoryEvent createResponse(final TradeOrder incomingOrder, final TradeOrder foundOrder, BigDecimal matchedQuantity) {

@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * 종복별로 주문을 관리한다.
@@ -28,6 +29,8 @@ public class CompanyOrderBook implements OrderBook {
     private final ConcurrentSkipListMap<Price, OrderStorage> buyOrders = new ConcurrentSkipListMap<>(
             Comparator.comparing(Price::getValue).reversed()
     );
+
+    private final ReentrantLock matchlock = new ReentrantLock();
 
     /**
      * 주문을 시장가, 지정가로 나누어 처리한다.
@@ -72,14 +75,19 @@ public class CompanyOrderBook implements OrderBook {
      * 지정가 주문: 주문을 매칭한 후, 남은 수량을 OrderStorage에 추가한다.
      */
     private List<TradeHistoryEvent> processLimitOrder(final TradeOrder order) {
+        matchlock.lock();
         final Price now = new Price(order.getPrice());
         List<TradeHistoryEvent> result = match(now, order);
         if (order.hasRemainingQuantity()) {
             addRemainingTradeOrder(order);
         }
+        matchlock.unlock();
         return result;
     }
 
+    /**
+     * 입력한 가격대의 주문과 매칭한다.
+     */
     private List<TradeHistoryEvent> match(final Price price, final TradeOrder order) {
         final List<TradeHistoryEvent> results = new ArrayList<>();
         while (order.hasRemainingQuantity()) {
@@ -93,6 +101,9 @@ public class CompanyOrderBook implements OrderBook {
         return results;
     }
 
+    /**
+     * 같은 타입(매도, 매수)의 주문을 저장하는 OrderStorage 조회한다. 존재하지 않을 경우 새로 생성하여 반환한다.
+     */
     private OrderStorage getOrCreateSameTypeOrderStorage(final Price price, final Type type) {
         if (type.isSell()) {
             if (sellOrders.containsKey(price)) {
@@ -108,6 +119,9 @@ public class CompanyOrderBook implements OrderBook {
         return buyOrders.get(price);
     }
 
+    /**
+     * 다른 타입(매도, 매수)의 주문을 저장하는 OrderStorage 조회한다.
+     */
     private OrderStorage getCounterOrderStorage(final Price price, final Type type) {
         if (type.isSell()) {
             return buyOrders.get(price);
@@ -115,13 +129,11 @@ public class CompanyOrderBook implements OrderBook {
         return sellOrders.get(price);
     }
 
+    /**
+     * 남은 주문을 OrderStorage에 저장한다.
+     */
     private void addRemainingTradeOrder(final TradeOrder order) {
         Price price = new Price(order.getPrice());
-        if (order.isSellType()) {
-            OrderStorage orderStorage = getOrCreateSameTypeOrderStorage(price, order.getType());
-            orderStorage.add(order);
-            return;
-        }
         OrderStorage orderStorage = getOrCreateSameTypeOrderStorage(price, order.getType());
         orderStorage.add(order);
     }
