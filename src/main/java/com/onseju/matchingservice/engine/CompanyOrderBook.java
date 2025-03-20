@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
 
 /**
@@ -32,34 +33,54 @@ public class CompanyOrderBook implements OrderBook {
      * 주문을 시장가, 지정가로 나누어 처리한다.
      */
     @Override
-    public Collection<TradeHistoryEvent> received(final TradeOrder order) {
+    public List<TradeHistoryEvent> received(final TradeOrder order) {
         if (order.isMarketOrder()) {
             return processMarketOrder(order);
         }
         return processLimitOrder(order);
     }
 
-    private Collection<TradeHistoryEvent> processMarketOrder(final TradeOrder order) {
-        return List.of();
+    /**
+     * 시장가 주문: 주문을 매칭한 후, 남은 수량에 대한 매칭을 더 이상 진행하지 않는다.
+     */
+    private List<TradeHistoryEvent> processMarketOrder(final TradeOrder order) {
+        if (order.isSellType()) {
+            List<TradeHistoryEvent> results = new ArrayList<>();
+            for (Price now: buyOrders.keySet()) {
+                Collection<TradeHistoryEvent> responses = match(now, order);
+                results.addAll(
+                        responses.stream()
+                                .filter(Objects::nonNull)
+                                .toList()
+                );
+            }
+            return results;
+        }
+        List<TradeHistoryEvent> results = new ArrayList<>();
+        for (Price now: sellOrders.keySet()) {
+            Collection<TradeHistoryEvent> responses = match(now, order);
+            results.addAll(
+                    responses.stream()
+                            .filter(Objects::nonNull)
+                            .toList()
+            );
+        }
+        return results;
     }
 
     /**
-     * 매도, 매수 유형을 구분하여 각 유형에 맞게 주문을 처리한다
+     * 지정가 주문: 주문을 매칭한 후, 남은 수량을 OrderStorage에 추가한다.
      */
-    private Collection<TradeHistoryEvent> processLimitOrder(final TradeOrder order) {
-        return matchLimitOrder(order);
-    }
-
-    private Collection<TradeHistoryEvent> matchLimitOrder(final TradeOrder order) {
+    private List<TradeHistoryEvent> processLimitOrder(final TradeOrder order) {
         final Price now = new Price(order.getPrice());
-        Collection<TradeHistoryEvent> result = match(now, order);
+        List<TradeHistoryEvent> result = match(now, order);
         if (order.hasRemainingQuantity()) {
             addRemainingTradeOrder(order);
         }
         return result;
     }
 
-    private Collection<TradeHistoryEvent> match(final Price price, final TradeOrder order) {
+    private List<TradeHistoryEvent> match(final Price price, final TradeOrder order) {
         final List<TradeHistoryEvent> results = new ArrayList<>();
         while (order.hasRemainingQuantity()) {
             final OrderStorage orderStorage = getCounterOrderStorage(price, order.getType());

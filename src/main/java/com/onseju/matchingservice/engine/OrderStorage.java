@@ -26,13 +26,14 @@ public class OrderStorage {
     }
 
     private TradeHistoryEvent createResponse(final TradeOrder incomingOrder, final TradeOrder foundOrder, BigDecimal matchedQuantity) {
+        final BigDecimal price = getMatchingPrice(incomingOrder, foundOrder);
         if (incomingOrder.isSellType()) {
             return new TradeHistoryEvent(
                     incomingOrder.getCompanyCode(),
                     foundOrder.getId(),
                     incomingOrder.getId(),
                     matchedQuantity,
-                    incomingOrder.getPrice(),
+                    price,
                     Instant.now().getEpochSecond()
             );
         }
@@ -41,9 +42,16 @@ public class OrderStorage {
                 incomingOrder.getId(),
                 foundOrder.getId(),
                 matchedQuantity,
-                incomingOrder.getPrice(),
+                price,
                 Instant.now().getEpochSecond()
         );
+    }
+
+    private BigDecimal getMatchingPrice(final TradeOrder incomingOrder, final TradeOrder foundOrder) {
+        if (incomingOrder.isMarketOrder()) {
+            return foundOrder.getPrice();
+        }
+        return incomingOrder.getPrice();
     }
 
     public boolean isEmpty() {

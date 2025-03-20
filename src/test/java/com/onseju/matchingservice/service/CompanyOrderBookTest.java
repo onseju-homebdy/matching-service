@@ -12,9 +12,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,8 +31,8 @@ public class CompanyOrderBookTest {
     }
 
     @Nested
-	@DisplayName("지정가 주문 테스트")
-	class LimitOrderTests {
+    @DisplayName("지정가 주문 테스트")
+    class LimitOrderTests {
         @Test
         @DisplayName("지정가 매수 주문 추가")
         void receiveLimitBuyOrder() throws MatchingException {
@@ -147,8 +148,8 @@ public class CompanyOrderBookTest {
 
 
         @Test
-        @DisplayName("주문 불균형 상황 테스트")
-        void testOrderImbalance() {
+        @DisplayName("매수 주문 불균형 상황 테스트")
+        void buyOrderImbalance() {
             // given
             for (int i = 0; i < 5; i++) {
                 TradeOrder buyOrder = createOrder((long) i, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L);
@@ -162,13 +163,134 @@ public class CompanyOrderBookTest {
             // then
             assertThat(response).hasSize(1);
         }
+
+        @Test
+        @DisplayName("매도 주문 불균형 상황 테스트")
+        void sellOrderImbalance() {
+            // given
+            for (int i = 0; i < 5; i++) {
+                TradeOrder sellOrder = createOrder((long) i, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+                orderBook.received(sellOrder);
+            }
+
+            // when
+            TradeOrder buyOrder = createOrder(5L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            Collection<TradeHistoryEvent> response = orderBook.received(buyOrder);
+
+            // then
+            assertThat(response).hasSize(1);
+        }
     }
 
     @Nested
     @DisplayName("시장가 주문 테스트")
     class MarketOrderTests {
 
+        @Test
+        @DisplayName("시장가 매수 주문 처리")
+        void receiveMarketBuyOrder() throws MatchingException {
+            // given
+            TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+            TradeOrder marketBuyOrder = createOrder(2L, Type.MARKET_BUY, BigDecimal.ZERO, new BigDecimal("5"), 2L);
 
+
+            // when
+            List<TradeHistoryEvent> responses = new ArrayList<>();
+            responses.addAll(orderBook.received(sellOrder));
+            responses.addAll(orderBook.received(marketBuyOrder));
+
+            // then
+            assertThat(responses).hasSize(1);
+            responses.forEach(res -> {
+                assertThat(res.buyOrderId()).isEqualTo(marketBuyOrder.getId());
+                assertThat(res.sellOrderId()).isEqualTo(sellOrder.getId());
+                assertThat(res.quantity()).isEqualTo(marketBuyOrder.getTotalQuantity());
+                assertThat(res.price()).isEqualTo(sellOrder.getPrice());
+            });
+        }
+
+        @Test
+        @DisplayName("시장가 매도 주문 처리")
+        void receiveMarketSellOrder() {
+            // given
+            TradeOrder buyOrder = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+            TradeOrder marketSellOrder = createOrder(2L, Type.MARKET_SELL, BigDecimal.ZERO, new BigDecimal("5"), 2L);
+
+
+            // when
+            orderBook.received(buyOrder);
+            List<TradeHistoryEvent> responses = new ArrayList<>(orderBook.received(marketSellOrder));
+
+            // then
+            assertThat(responses).hasSize(1);
+            responses.forEach(res -> {
+                assertThat(res.buyOrderId()).isEqualTo(buyOrder.getId());
+                assertThat(res.sellOrderId()).isEqualTo(marketSellOrder.getId());
+                assertThat(res.quantity()).isEqualTo(marketSellOrder.getTotalQuantity());
+                assertThat(res.price()).isEqualTo(buyOrder.getPrice());
+            });
+        }
+
+        @Test
+        @DisplayName("시장가 매수 주문 시, 낮은 가격의 매도 주문 부터 높은 가격의 주문 순으로 여러 가격대의 주문과 체결될 수 있다.")
+        void matchBuyMarketOrderWithLowestPrice() {
+            // given
+            // 지정가 매도 주문 2개 추가 (서로 다른 가격)
+            TradeOrder sellOrder1 = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("49000"), new BigDecimal("5"), 1L);
+            TradeOrder sellOrder2 = createOrder(2L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+            TradeOrder marketBuyOrder = createOrder(3L, Type.MARKET_BUY, BigDecimal.ZERO, new BigDecimal("10"), 2L);
+
+
+            // When
+            orderBook.received(sellOrder1);
+            orderBook.received(sellOrder2);
+            List<TradeHistoryEvent> responses = orderBook.received(marketBuyOrder);
+
+            // Then
+            // 호가창 확인
+            assertThat(responses).hasSize(2);
+
+            TradeHistoryEvent sellOrderEvent1 = responses.get(0);
+            assertThat(sellOrderEvent1.sellOrderId()).isEqualTo(sellOrder1.getId());
+            assertThat(sellOrderEvent1.buyOrderId()).isEqualTo(marketBuyOrder.getId());
+            assertThat(sellOrderEvent1.price()).isEqualTo(sellOrder1.getPrice());
+
+            TradeHistoryEvent sellOrderEvent2 = responses.get(1);
+            assertThat(sellOrderEvent2.sellOrderId()).isEqualTo(sellOrder2.getId());
+            assertThat(sellOrderEvent2.buyOrderId()).isEqualTo(marketBuyOrder.getId());
+            assertThat(sellOrderEvent2.price()).isEqualTo(sellOrder2.getPrice());
+        }
+
+        @Test
+        @DisplayName("시장가 매수 주문 시, 낮은 가격의 매도 주문 부터 높은 가격의 주문 순으로 여러 가격대의 주문과 체결될 수 있다.")
+        void matchSellMarketOrderWithHighestPrice() {
+            // given
+            // 지정가 매도 주문 2개 추가 (서로 다른 가격)
+            TradeOrder buyOrder1 = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("49000"), new BigDecimal("5"), 1L);
+            TradeOrder buyOrder2 = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+            TradeOrder marketSellOrder = createOrder(3L, Type.MARKET_SELL, BigDecimal.ZERO, new BigDecimal("10"), 2L);
+
+
+            // When
+            orderBook.received(buyOrder1);
+            orderBook.received(buyOrder2);
+            List<TradeHistoryEvent> responses = orderBook.received(marketSellOrder);
+
+            // Then
+            assertThat(responses).hasSize(2);
+
+            // 낮은 가격의 주문 먼저 체결
+            TradeHistoryEvent sellOrderEvent2 = responses.get(0);
+            assertThat(sellOrderEvent2.sellOrderId()).isEqualTo(marketSellOrder.getId());
+            assertThat(sellOrderEvent2.buyOrderId()).isEqualTo(buyOrder2.getId());
+            assertThat(sellOrderEvent2.price()).isEqualTo(buyOrder2.getPrice());
+
+            // 낮은 가격 체결 후 다음 가격대 주문 체결
+            TradeHistoryEvent sellOrderEvent1 = responses.get(1);
+            assertThat(sellOrderEvent1.sellOrderId()).isEqualTo(marketSellOrder.getId());
+            assertThat(sellOrderEvent1.buyOrderId()).isEqualTo(buyOrder1.getId());
+            assertThat(sellOrderEvent1.price()).isEqualTo(buyOrder1.getPrice());
+        }
     }
 
     private TradeOrder createOrder(Long id, Type type, BigDecimal price, BigDecimal quantity, Long accountId) {
@@ -184,27 +306,4 @@ public class CompanyOrderBookTest {
                 .createdDateTime(LocalDateTime.of(2025, 03, 01, 0, 0, 0))
                 .build();
     }
-
-    // 매도자, 매수자 구분 후 응답 생성
-    private TradeHistoryEvent createResponse(final TradeOrder incomingOrder, final TradeOrder foundOrder, BigDecimal matchedQuantity, BigDecimal matchPrice) {
-        if (incomingOrder.isSellType()) {
-            return new TradeHistoryEvent(
-                    incomingOrder.getCompanyCode(),
-                    foundOrder.getId(),
-                    incomingOrder.getId(),
-                    matchedQuantity,
-                    incomingOrder.getPrice(),
-                    Instant.now().getEpochSecond()
-            );
-        }
-        return new TradeHistoryEvent(
-                incomingOrder.getCompanyCode(),
-                incomingOrder.getId(),
-                foundOrder.getId(),
-                matchedQuantity,
-                incomingOrder.getPrice(),
-                Instant.now().getEpochSecond()
-        );
-    }
-
 }
