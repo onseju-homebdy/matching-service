@@ -293,6 +293,79 @@ public class CompanyOrderBookTest {
         }
     }
 
+    @Nested
+    @DisplayName("주문 처리 순서 테스트")
+    class MatchingSequenceTests {
+
+        @Test
+        @DisplayName("매수 주문시, 같은 가격일 경우 먼저 주문이 들어온 주문부터 처리한다.")
+        void buyOrderTimePriorityMatching() throws MatchingException {
+            LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
+            TradeOrder buyOrder1 = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
+            TradeOrder buyOrder2 = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt.minusSeconds(1));
+            TradeOrder sellOrder = createOrder(3L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+
+            orderBook.received(buyOrder2);
+            orderBook.received(buyOrder1);
+            orderBook.received(sellOrder);
+
+            assertThat(buyOrder2.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
+            assertThat(buyOrder1.getRemainingQuantity().get()).isEqualTo(new BigDecimal("5"));
+            assertThat(sellOrder.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("매도 주문시, 같은 가격일 경우 먼저 주문이 들어온 주문부터 처리한다.")
+        void sellOrderTimePriorityMatching() throws MatchingException {
+            LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
+            TradeOrder sellOrder1 = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt.minusSeconds(1));
+            TradeOrder sellOrder2 = createOrder(2L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
+            TradeOrder buyOrder = createOrder(3L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L, createdAt);
+
+            orderBook.received(sellOrder1);
+            orderBook.received(sellOrder2);
+            orderBook.received(buyOrder);
+
+            assertThat(sellOrder1.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
+            assertThat(sellOrder2.getRemainingQuantity().get()).isEqualTo(new BigDecimal("5"));
+            assertThat(buyOrder.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("매수 주문시, 모든 조건이 일치할 경우 수량이 많은 주문부터 체결한다.")
+        void buyOrderQuantityPriorityMatching() throws MatchingException {
+            LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
+            TradeOrder buyOrder1 = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
+            TradeOrder buyOrder2 = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("10"), 1L, createdAt);
+            TradeOrder sellOrder = createOrder(3L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 2L, createdAt);
+
+            orderBook.received(buyOrder1);
+            orderBook.received(buyOrder2);
+            orderBook.received(sellOrder);
+
+            assertThat(buyOrder1.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
+            assertThat(buyOrder2.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
+            assertThat(sellOrder.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
+        }
+
+        @Test
+        @DisplayName("매도 주문시, 모든 조건이 일치할 경우 수량이 많은 주문부터 체결한다.")
+        void sellOrderQuantityPriorityMatching() throws MatchingException {
+            LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
+            TradeOrder sellOrder1 = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("10"), 1L, createdAt);
+            TradeOrder sellOrder2 = createOrder(2L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
+            TradeOrder buyOrder = createOrder(3L, Type.MARKET_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L, createdAt);
+
+            orderBook.received(sellOrder2);
+            orderBook.received(sellOrder1);
+            orderBook.received(buyOrder);
+
+            assertThat(sellOrder1.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
+            assertThat(sellOrder2.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
+            assertThat(buyOrder.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
+        }
+    }
+
     private TradeOrder createOrder(Long id, Type type, BigDecimal price, BigDecimal quantity, Long accountId) {
         return TradeOrder.builder()
                 .id(id)
@@ -304,6 +377,20 @@ public class CompanyOrderBookTest {
                 .totalQuantity(quantity)
                 .remainingQuantity(new AtomicReference<>(quantity))
                 .createdDateTime(LocalDateTime.of(2025, 03, 01, 0, 0, 0))
+                .build();
+    }
+
+    private TradeOrder createOrder(Long id, Type type, BigDecimal price, BigDecimal quantity, Long accountId, LocalDateTime createdDateTime) {
+        return TradeOrder.builder()
+                .id(id)
+                .type(type)
+                .price(price)
+                .accountId(accountId)
+                .companyCode("005930")
+                .status(OrderStatus.ACTIVE)
+                .totalQuantity(quantity)
+                .remainingQuantity(new AtomicReference<>(quantity))
+                .createdDateTime(createdDateTime)
                 .build();
     }
 }

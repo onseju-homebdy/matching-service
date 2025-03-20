@@ -12,7 +12,7 @@ public class OrderStorage {
 
     private final ConcurrentSkipListSet<TradeOrder> elements = new ConcurrentSkipListSet<>(
             Comparator.comparing(TradeOrder::getCreatedDateTime)
-                    .thenComparing(TradeOrder::getTotalQuantity)
+                    .thenComparing(TradeOrder::getTotalQuantity, Comparator.reverseOrder())
                     .thenComparing(TradeOrder::getId)
     );
 
