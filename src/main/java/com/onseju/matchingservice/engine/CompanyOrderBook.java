@@ -47,21 +47,10 @@ public class CompanyOrderBook implements OrderBook {
      * 시장가 주문: 주문을 매칭한 후, 남은 수량에 대한 매칭을 더 이상 진행하지 않는다.
      */
     private List<TradeHistoryEvent> processMarketOrder(final TradeOrder order) {
-        if (order.isSellType()) {
-            List<TradeHistoryEvent> results = new ArrayList<>();
-            for (Price now: buyOrders.keySet()) {
-                Collection<TradeHistoryEvent> responses = match(now, order);
-                results.addAll(
-                        responses.stream()
-                                .filter(Objects::nonNull)
-                                .toList()
-                );
-            }
-            return results;
-        }
+        ConcurrentSkipListMap<Price, OrderStorage> orders = getCounterOrders(order.getType());
         List<TradeHistoryEvent> results = new ArrayList<>();
-        for (Price now: sellOrders.keySet()) {
-            List<TradeHistoryEvent> responses = match(now, order);
+        for (Price now: orders.keySet()) {
+            Collection<TradeHistoryEvent> responses = match(now, order);
             results.addAll(
                     responses.stream()
                             .filter(Objects::nonNull)
@@ -69,6 +58,13 @@ public class CompanyOrderBook implements OrderBook {
             );
         }
         return results;
+    }
+
+    private ConcurrentSkipListMap<Price, OrderStorage> getCounterOrders(final Type type) {
+        if (type.isSell()) {
+            return buyOrders;
+        }
+        return sellOrders;
     }
 
     /**
@@ -101,17 +97,9 @@ public class CompanyOrderBook implements OrderBook {
      */
     private OrderStorage getOrCreateSameTypeOrderStorage(final Price price, final Type type) {
         if (type.isSell()) {
-            if (sellOrders.containsKey(price)) {
-                return sellOrders.get(price);
-            }
-            sellOrders.put(price, new OrderStorage());
-            return sellOrders.get(price);
+            return sellOrders.computeIfAbsent(price, p -> new OrderStorage());
         }
-        if (buyOrders.containsKey(price)) {
-            return buyOrders.get(price);
-        }
-        buyOrders.put(price, new OrderStorage());
-        return buyOrders.get(price);
+        return buyOrders.computeIfAbsent(price, p -> new OrderStorage());
     }
 
     /**
