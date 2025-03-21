@@ -140,11 +140,19 @@ public class CompanyOrderBook implements OrderBook {
 
     @Override
     public boolean isSellOrderBelowMarketPrice(TradeOrder order) {
-        return false;
+        if (!order.isSellType() || sellOrders.isEmpty()) {
+            return false;
+        }
+        Price lowestSellOrder = sellOrders.firstKey();
+        return lowestSellOrder.isHigherThan(order.getPrice());
     }
 
     @Override
     public boolean isBuyOrderAboveMarketPrice(TradeOrder order) {
-        return false;
+        if (order.isSellType() || buyOrders.isEmpty()) {
+            return false;
+        }
+        Price highestBuyOrder = buyOrders.firstKey();
+        return !highestBuyOrder.isHigherThan(order.getPrice());
     }
 }

@@ -7,7 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
-import java.util.Collection;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -21,7 +21,8 @@ public class MatchingEngine {
 
     public void processOrder(final TradeOrder order) {
         final OrderBook orderBook = getOrCreateOrderBook(order.getCompanyCode());
-        Collection<TradeHistoryEvent> results = orderBook.received(order);
+        checkAndChangeLimitToMarket(order);
+        List<TradeHistoryEvent> results = orderBook.received(order);
         results.forEach(eventPublisher::publishEvent);
     }
 
@@ -31,5 +32,30 @@ public class MatchingEngine {
                 companyCode,
                 key -> orderBookFactory.createOrderBook()
         );
+    }
+
+    // 지정가 주문 시, 시장가와 비교하여 시장가보다 불리할 경우 시장가로 상태 변경
+    private void checkAndChangeLimitToMarket(final TradeOrder order) {
+        if (order.isSellType()) {
+            updateSellOrderStatusIfBelowMarketPrice(order);
+            return;
+        }
+        updateBuyOrderStatusIfAboveMarketPrice(order);
+    }
+
+    // 매도 주문의 가격이 시장가보다 낮은 경우 시장가로 상태 변경
+    private void updateSellOrderStatusIfBelowMarketPrice(final TradeOrder order) {
+        OrderBook orderBook = getOrCreateOrderBook(order.getCompanyCode());
+        if (orderBook.isSellOrderBelowMarketPrice(order)) {
+            order.changeTypeToMarket();
+        }
+    }
+
+    // 매수 주문의 가격의 시장가보다 높은 경우 시장가로 상태 변경
+    private void updateBuyOrderStatusIfAboveMarketPrice(final TradeOrder order) {
+        OrderBook orderBook = getOrCreateOrderBook(order.getCompanyCode());
+        if (orderBook.isBuyOrderAboveMarketPrice(order)) {
+            order.changeTypeToMarket();
+        }
     }
 }

@@ -15,6 +15,10 @@ public class Price {
         return value;
     }
 
+    public boolean isHigherThan(BigDecimal price) {
+        return value.compareTo(price) > 0;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) {

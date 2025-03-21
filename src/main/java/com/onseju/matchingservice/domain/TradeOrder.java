@@ -18,7 +18,7 @@ public class TradeOrder {
 
     private final String companyCode;
 
-    private final Type type;
+    private Type type;
 
     private OrderStatus status;
 
@@ -67,6 +67,16 @@ public class TradeOrder {
 
     public boolean isMarketOrder() {
         return type.isMarket();
+    }
+
+    public void changeTypeToMarket() {
+        if (isSellType()) {
+            this.type = Type.MARKET_SELL;
+            price = BigDecimal.ZERO;
+            return;
+        }
+        this.type = Type.MARKET_BUY;
+        price = BigDecimal.ZERO;
     }
 
     @Override

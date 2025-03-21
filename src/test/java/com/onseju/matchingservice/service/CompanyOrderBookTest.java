@@ -5,7 +5,6 @@ import com.onseju.matchingservice.domain.TradeOrder;
 import com.onseju.matchingservice.domain.Type;
 import com.onseju.matchingservice.dto.TradeHistoryEvent;
 import com.onseju.matchingservice.engine.CompanyOrderBook;
-import com.onseju.matchingservice.exception.MatchingException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -35,7 +34,7 @@ public class CompanyOrderBookTest {
     class LimitOrderTests {
         @Test
         @DisplayName("지정가 매수 주문 추가")
-        void receiveLimitBuyOrder() throws MatchingException {
+        void receiveLimitBuyOrder() {
             // given
             TradeOrder buyOrder = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("10"), 1L);
 
@@ -46,7 +45,7 @@ public class CompanyOrderBookTest {
 
         @Test
         @DisplayName("지정가 매도 주문 추가")
-        void receiveLimitSellOrder() throws MatchingException {
+        void receiveLimitSellOrder() {
             // given
             TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("10"), 1L);
 
@@ -188,7 +187,7 @@ public class CompanyOrderBookTest {
 
         @Test
         @DisplayName("시장가 매수 주문 처리")
-        void receiveMarketBuyOrder() throws MatchingException {
+        void receiveMarketBuyOrder() {
             // given
             TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L);
             TradeOrder marketBuyOrder = createOrder(2L, Type.MARKET_BUY, BigDecimal.ZERO, new BigDecimal("5"), 2L);
@@ -299,7 +298,7 @@ public class CompanyOrderBookTest {
 
         @Test
         @DisplayName("매수 주문시, 같은 가격일 경우 먼저 주문이 들어온 주문부터 처리한다.")
-        void buyOrderTimePriorityMatching() throws MatchingException {
+        void buyOrderTimePriorityMatching() {
             LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
             TradeOrder buyOrder1 = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
             TradeOrder buyOrder2 = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt.minusSeconds(1));
@@ -316,7 +315,7 @@ public class CompanyOrderBookTest {
 
         @Test
         @DisplayName("매도 주문시, 같은 가격일 경우 먼저 주문이 들어온 주문부터 처리한다.")
-        void sellOrderTimePriorityMatching() throws MatchingException {
+        void sellOrderTimePriorityMatching() {
             LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
             TradeOrder sellOrder1 = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt.minusSeconds(1));
             TradeOrder sellOrder2 = createOrder(2L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
@@ -333,7 +332,7 @@ public class CompanyOrderBookTest {
 
         @Test
         @DisplayName("매수 주문시, 모든 조건이 일치할 경우 수량이 많은 주문부터 체결한다.")
-        void buyOrderQuantityPriorityMatching() throws MatchingException {
+        void buyOrderQuantityPriorityMatching() {
             LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
             TradeOrder buyOrder1 = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
             TradeOrder buyOrder2 = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("10"), 1L, createdAt);
@@ -350,7 +349,7 @@ public class CompanyOrderBookTest {
 
         @Test
         @DisplayName("매도 주문시, 모든 조건이 일치할 경우 수량이 많은 주문부터 체결한다.")
-        void sellOrderQuantityPriorityMatching() throws MatchingException {
+        void sellOrderQuantityPriorityMatching() {
             LocalDateTime createdAt = LocalDateTime.of(2025, 1, 1, 0, 0);
             TradeOrder sellOrder1 = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("10"), 1L, createdAt);
             TradeOrder sellOrder2 = createOrder(2L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L, createdAt);
@@ -363,6 +362,79 @@ public class CompanyOrderBookTest {
             assertThat(sellOrder1.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
             assertThat(sellOrder2.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
             assertThat(buyOrder.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
+        }
+    }
+
+    @Nested
+    @DisplayName("입력 받은 주문과 시장가를 비교한다")
+    class MarketPrice {
+
+        @Test
+        @DisplayName("매도 주문시, 시장가보다 가격이 낮은 경우 true를 반환한다.")
+        void isSellOrderBelowMarketPrice() {
+            // given: 시장가 5만원 형성
+            TradeOrder sellOrder1 = createOrder(2L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            TradeOrder sellOrder2 = createOrder(3L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            orderBook.received(sellOrder1);
+            orderBook.received(sellOrder2);
+
+            // when
+            TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("49000"), new BigDecimal("10"), 1L);
+            boolean result = orderBook.isSellOrderBelowMarketPrice(sellOrder);
+
+            // then
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        @DisplayName("매도 주문시, 시장가보다 가격이 높은 경우 false를 반환한다.")
+        void isSellOrderHigherThanMarketPrice() {
+            // given: 시장가 5만원 형성
+            TradeOrder sellOrder1 = createOrder(2L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            TradeOrder sellOrder2 = createOrder(3L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            orderBook.received(sellOrder1);
+            orderBook.received(sellOrder2);
+
+            // when
+            TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("51000"), new BigDecimal("10"), 1L);
+            boolean result = orderBook.isSellOrderBelowMarketPrice(sellOrder);
+
+            // then
+            assertThat(result).isFalse();
+        }
+
+        @Test
+        @DisplayName("매수 주문시, 시장가보다 가격이 높은 경우 true를 반환한다.")
+        void isBuyOrderAboveMarketPrice() {
+            // given: 시장가 5만원 형성
+            TradeOrder buyOrder1 = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            TradeOrder buyOrder2 = createOrder(3L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            orderBook.received(buyOrder1);
+            orderBook.received(buyOrder2);
+
+            // when
+            TradeOrder buyOrder = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("51000"), new BigDecimal("10"), 1L);
+            boolean result = orderBook.isBuyOrderAboveMarketPrice(buyOrder);
+
+            // then
+            assertThat(result).isTrue();
+        }
+
+        @Test
+        @DisplayName("매수 주문시, 시장가보다 가격이 낮은 경우 false를 반환한다.")
+        void isBuyOrderLowerThanMarketPrice() {
+            // given: 시장가 5만원 형성
+            TradeOrder buyOrder1 = createOrder(2L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            TradeOrder buyOrder2 = createOrder(3L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+            orderBook.received(buyOrder1);
+            orderBook.received(buyOrder2);
+
+            // when
+            TradeOrder buyOrder = createOrder(1L, Type.LIMIT_BUY, new BigDecimal("49000"), new BigDecimal("10"), 1L);
+            boolean result = orderBook.isBuyOrderAboveMarketPrice(buyOrder);
+
+            // then
+            assertThat(result).isFalse();
         }
     }
 
