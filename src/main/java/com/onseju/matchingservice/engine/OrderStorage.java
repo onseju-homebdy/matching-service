@@ -50,7 +50,9 @@ public class OrderStorage {
             return new TradeHistoryEvent(
                     incomingOrder.getCompanyCode(),
                     foundOrder.getId(),
+                    foundOrder.getAccountId(),
                     incomingOrder.getId(),
+                    incomingOrder.getAccountId(),
                     matchedQuantity,
                     price,
                     Instant.now().getEpochSecond()
@@ -59,7 +61,9 @@ public class OrderStorage {
         return new TradeHistoryEvent(
                 incomingOrder.getCompanyCode(),
                 incomingOrder.getId(),
+                incomingOrder.getAccountId(),
                 foundOrder.getId(),
+                foundOrder.getAccountId(),
                 matchedQuantity,
                 price,
                 Instant.now().getEpochSecond()

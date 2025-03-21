@@ -111,7 +111,9 @@ public class CompanyOrderBookTest {
             assertThat(responses).hasSize(1);
             responses.forEach(result -> {
                 assertThat(result.sellOrderId()).isEqualTo(sellOrder.getId());
+                assertThat(result.sellAccountId()).isEqualTo(sellOrder.getAccountId());
                 assertThat(result.buyOrderId()).isEqualTo(buyOrder1.getId());
+                assertThat(result.buyAccountId()).isEqualTo(buyOrder1.getAccountId());
                 assertThat(result.price()).isEqualTo(sellOrder.getPrice());
                 assertThat(result.quantity()).isEqualTo(sellOrder.getTotalQuantity());
             });
@@ -133,7 +135,9 @@ public class CompanyOrderBookTest {
             assertThat(buyOrder.getRemainingQuantity().get()).isEqualTo(new BigDecimal("5"));
             responses.forEach(result -> {
                 assertThat(result.sellOrderId()).isEqualTo(sellOrder.getId());
+                assertThat(result.sellAccountId()).isEqualTo(sellOrder.getAccountId());
                 assertThat(result.buyOrderId()).isEqualTo(buyOrder.getId());
+                assertThat(result.buyAccountId()).isEqualTo(buyOrder.getAccountId());
                 assertThat(result.price()).isEqualTo(buyOrder.getPrice());
                 assertThat(result.quantity()).isEqualTo(buyOrder.getTotalQuantity().subtract(buyOrder.getRemainingQuantity().get()));
             });
@@ -357,8 +361,10 @@ public class CompanyOrderBookTest {
 
             orderBook.received(buyOrder1);
             orderBook.received(buyOrder2);
-            orderBook.received(sellOrder);
+            List<TradeHistoryEvent> results = orderBook.received(sellOrder);
 
+            assertThat(results.get(0).buyAccountId()).isEqualTo(buyOrder2.getAccountId());
+            assertThat(results.get(0).sellAccountId()).isEqualTo(sellOrder.getAccountId());
             assertThat(buyOrder1.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
             assertThat(buyOrder2.getRemainingQuantity().get()).isEqualTo(new BigDecimal(5));
             assertThat(sellOrder.getRemainingQuantity().get()).isEqualTo(BigDecimal.ZERO);
