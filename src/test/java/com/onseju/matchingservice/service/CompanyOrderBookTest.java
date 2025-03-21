@@ -310,7 +310,7 @@ public class CompanyOrderBookTest {
     }
 
     @Nested
-    @DisplayName("주문 처리 순서 테스트")
+    @DisplayName("주문 처리 조건 및 순서 테스트")
     class MatchingSequenceTests {
 
         @Test
@@ -452,6 +452,23 @@ public class CompanyOrderBookTest {
 
             // then
             assertThat(result).isFalse();
+        }
+
+        @Test
+        @DisplayName("자신의 주문과는 매칭되지 않는다.")
+        void changeOrderStatusToCompleteWhenTradeIsExecuted() {
+            // given
+            Long accountId = 1L;
+            TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), accountId);
+            TradeOrder buyOrder = createOrder(3L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), accountId);
+
+            // when
+            orderBook.received(sellOrder);
+            orderBook.received(buyOrder);
+
+            // then
+            assertThat(sellOrder.getStatus()).isNotEqualTo(OrderStatus.COMPLETE);
+            assertThat(buyOrder.getStatus()).isNotEqualTo(OrderStatus.COMPLETE);
         }
     }
 

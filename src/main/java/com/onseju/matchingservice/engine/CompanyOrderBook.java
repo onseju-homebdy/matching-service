@@ -61,7 +61,7 @@ public class CompanyOrderBook implements OrderBook {
         }
         List<TradeHistoryEvent> results = new ArrayList<>();
         for (Price now: sellOrders.keySet()) {
-            Collection<TradeHistoryEvent> responses = match(now, order);
+            List<TradeHistoryEvent> responses = match(now, order);
             results.addAll(
                     responses.stream()
                             .filter(Objects::nonNull)
@@ -89,16 +89,11 @@ public class CompanyOrderBook implements OrderBook {
      * 입력한 가격대의 주문과 매칭한다.
      */
     private List<TradeHistoryEvent> match(final Price price, final TradeOrder order) {
-        final List<TradeHistoryEvent> results = new ArrayList<>();
-        while (order.hasRemainingQuantity()) {
-            final OrderStorage orderStorage = getCounterOrderStorage(price, order.getType());
-            if (orderStorage == null || orderStorage.isEmpty()) {
-                break;
-            }
-            TradeHistoryEvent history = orderStorage.match(order);
-            results.add(history);
+        final OrderStorage orderStorage = getCounterOrderStorage(price, order.getType());
+        if (orderStorage == null || orderStorage.isEmpty()) {
+            return List.of();
         }
-        return results;
+        return orderStorage.match(order);
     }
 
     /**

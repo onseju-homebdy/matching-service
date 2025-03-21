@@ -33,7 +33,7 @@ public class TradeOrder {
     private Long accountId;
 
     // 입력 주문과 같은 계정으로부터의 주문인지 확인
-    public boolean hasSameAccount(Long otherAccountId) {
+    public boolean isSameAccount(Long otherAccountId) {
         if (otherAccountId == null) {
             return false;
         }

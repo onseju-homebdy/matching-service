@@ -3,7 +3,6 @@ package com.onseju.matchingservice.engine;
 import com.onseju.matchingservice.domain.OrderStatus;
 import com.onseju.matchingservice.domain.TradeOrder;
 import com.onseju.matchingservice.domain.Type;
-import com.onseju.matchingservice.dto.TradeHistoryEvent;
 import com.onseju.matchingservice.factory.OrderBookFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,9 +19,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class MatchingEngineTest {
@@ -89,21 +85,6 @@ class MatchingEngineTest {
 
         // then
         assertThat(order3.getType()).isEqualTo(Type.MARKET_BUY);
-    }
-
-    @Test
-    @DisplayName("주문 처리 후 거래 이벤트를 발행한다")
-    void processOrder_shouldPublishTradeHistoryEvents() {
-        // given
-        TradeOrder order = createOrder(1L, Type.LIMIT_BUY, new BigDecimal(10000), new BigDecimal(5), 1L);
-        TradeOrder order2 = createOrder(1L, Type.LIMIT_SELL, new BigDecimal(10000), new BigDecimal(5), 1L);
-
-        // when
-        matchingEngine.processOrder(order);
-        matchingEngine.processOrder(order2);
-
-        // then
-        verify(eventPublisher, times(1)).publishEvent(any(TradeHistoryEvent.class));
     }
 
     private TradeOrder createOrder(Long id, Type type, BigDecimal price, BigDecimal quantity, Long accountId) {

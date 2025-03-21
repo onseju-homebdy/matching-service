@@ -5,7 +5,10 @@ import com.onseju.matchingservice.dto.TradeHistoryEvent;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.ConcurrentSkipListSet;
 
 public class OrderStorage {
@@ -17,20 +20,27 @@ public class OrderStorage {
     );
 
     // Set 내에 존재하는 주문과 입력된 주문을 매칭힌다.
-    public TradeHistoryEvent match(final TradeOrder incomingOrder) {
-        TradeOrder matchingOrder = elements.first();
-        BigDecimal matchedQuantity = incomingOrder.calculateMatchQuantity(matchingOrder);
+    public List<TradeHistoryEvent> match(final TradeOrder incomingOrder) {
+        Iterator<TradeOrder> iterator = elements.iterator();
+        List<TradeHistoryEvent> results = new ArrayList<>();
+        while (iterator.hasNext() && incomingOrder.hasRemainingQuantity()) {
+            final TradeOrder foundedOrder = iterator.next();
+            if (foundedOrder.isSameAccount(incomingOrder.getAccountId())) {
+                continue;
+            }
 
-        // 체결 완료 후 남은 수량 감소 및 완료 여부 확인
-        incomingOrder.decreaseRemainingQuantity(matchedQuantity);
-        matchingOrder.decreaseRemainingQuantity(matchedQuantity);
-        incomingOrder.checkAndChangeOrderStatus();
-        matchingOrder.checkAndChangeOrderStatus();
+            BigDecimal matchedQuantity = incomingOrder.calculateMatchQuantity(foundedOrder);
+            // 체결 완료 후 남은 수량 감소 및 완료 여부 확인
+            incomingOrder.decreaseRemainingQuantity(matchedQuantity);
+            foundedOrder.decreaseRemainingQuantity(matchedQuantity);
+            incomingOrder.checkAndChangeOrderStatus();
+            foundedOrder.checkAndChangeOrderStatus();
+            results.add(createResponse(incomingOrder, foundedOrder, matchedQuantity));
 
-        if (!matchingOrder.hasRemainingQuantity()) {
-            elements.remove(matchingOrder);
+            if (!foundedOrder.hasRemainingQuantity())
+                iterator.remove();
         }
-        return createResponse(incomingOrder, matchingOrder, matchedQuantity);
+        return results;
     }
 
     // 매칭 완료 후 응답 생성
