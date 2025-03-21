@@ -57,8 +57,10 @@ public class TradeOrder {
     }
 
     // 체결 완료 여부 확인
-    public boolean isCompletelyFilled() {
-        return !this.remainingQuantity.get().equals(BigDecimal.ZERO);
+    public void checkAndChangeOrderStatus() {
+        if (this.remainingQuantity.get().equals(BigDecimal.ZERO)) {
+            this.status = OrderStatus.COMPLETE;
+        }
     }
 
     public boolean hasRemainingQuantity() {

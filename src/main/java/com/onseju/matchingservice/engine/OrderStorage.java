@@ -16,17 +16,24 @@ public class OrderStorage {
                     .thenComparing(TradeOrder::getId)
     );
 
+    // Set 내에 존재하는 주문과 입력된 주문을 매칭힌다.
     public TradeHistoryEvent match(final TradeOrder incomingOrder) {
         TradeOrder matchingOrder = elements.first();
         BigDecimal matchedQuantity = incomingOrder.calculateMatchQuantity(matchingOrder);
+
+        // 체결 완료 후 남은 수량 감소 및 완료 여부 확인
         incomingOrder.decreaseRemainingQuantity(matchedQuantity);
         matchingOrder.decreaseRemainingQuantity(matchedQuantity);
+        incomingOrder.checkAndChangeOrderStatus();
+        matchingOrder.checkAndChangeOrderStatus();
+
         if (!matchingOrder.hasRemainingQuantity()) {
             elements.remove(matchingOrder);
         }
         return createResponse(incomingOrder, matchingOrder, matchedQuantity);
     }
 
+    // 매칭 완료 후 응답 생성
     private TradeHistoryEvent createResponse(final TradeOrder incomingOrder, final TradeOrder foundOrder, BigDecimal matchedQuantity) {
         final BigDecimal price = getMatchingPrice(incomingOrder, foundOrder);
         if (incomingOrder.isSellType()) {
@@ -49,6 +56,7 @@ public class OrderStorage {
         );
     }
 
+    // 매칭 가격을 계산한다.
     private BigDecimal getMatchingPrice(final TradeOrder incomingOrder, final TradeOrder foundOrder) {
         if (incomingOrder.isMarketOrder()) {
             return foundOrder.getPrice();

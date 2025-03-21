@@ -32,6 +32,7 @@ public class CompanyOrderBookTest {
     @Nested
     @DisplayName("지정가 주문 테스트")
     class LimitOrderTests {
+
         @Test
         @DisplayName("지정가 매수 주문 추가")
         void receiveLimitBuyOrder() {
@@ -52,6 +53,22 @@ public class CompanyOrderBookTest {
             // when, then
             assertThatNoException()
                     .isThrownBy(() -> orderBook.received(sellOrder));
+        }
+
+        @Test
+        @DisplayName("주문에 대한 체결이 완료된 경우 상태를 COMPLETE로 변경")
+        void changeOrderStatusToCompleteWhenTradeIsExecuted() {
+            // given
+            TradeOrder sellOrder = createOrder(1L, Type.LIMIT_SELL, new BigDecimal("50000"), new BigDecimal("5"), 1L);
+            TradeOrder buyOrder = createOrder(3L, Type.LIMIT_BUY, new BigDecimal("50000"), new BigDecimal("5"), 2L);
+
+            // when
+            orderBook.received(sellOrder);
+            orderBook.received(buyOrder);
+
+            // then
+            assertThat(sellOrder.getStatus()).isEqualTo(OrderStatus.COMPLETE);
+            assertThat(buyOrder.getStatus()).isEqualTo(OrderStatus.COMPLETE);
         }
 
         @Test
